@@ -6,7 +6,10 @@ from torch_geometric.data import Data
 import argparse
 from tqdm import tqdm
 import Bio.PDB
+from Bio.SeqUtils import seq1
 from model_dist import Spatom
+import h5py
+
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(DEVICE)
@@ -59,6 +62,12 @@ def def_atom_features():
             atom_fea[i] = [i_fea[0] / 2 + 0.5, i_fea[1] / 3, i_fea[2]]
 
     return atom_features
+
+
+
+
+
+
 def get_pdb_DF(file_path):
     atom_fea_dict = def_atom_features()
     res_dict = {'GLY': 'G', 'ALA': 'A', 'VAL': 'V', 'ILE': 'I', 'LEU': 'L', 'PHE': 'F', 'PRO': 'P', 'MET': 'M',
@@ -143,17 +152,18 @@ def get_pdb_DF(file_path):
         return pdb_res, res_id_list
 
 
-def extract_features(pdb_file_path):
-    pdb_res, res_id_list = get_pdb_DF(pdb_file_path)
-    features = []
-    for index, row in pdb_res.iterrows():
-        xyz = row['xyz']
-        mass = row['mass']
-        is_sidechain = row['is_sidechain']
-        features.append([xyz[0], xyz[1], xyz[2], mass, is_sidechain])
-    return np.array(features)
+# def extract_features(pdb_file_path):
+#     pdb_res, res_id_list = get_pdb_DF(pdb_file_path)
+#     # print(res_id_list)
+#     features = []
+#     for index, row in pdb_res.iterrows():
+#         xyz = row['xyz']
+#         mass = row['mass']
+#         is_sidechain = row['is_sidechain']
+#         features.append([xyz[0], xyz[1], xyz[2], mass, is_sidechain])
+#     return np.array(features)
 
-def calculate_projections(seq, residue_psepos_CA, residue_psepos_SC, dist=12, max_neighbors=64):
+def calculate_projections(seq, residue_psepos_CA, residue_psepos_SC, dist=13):
     projections = []
     pos_CA = residue_psepos_CA[seq]
     pos_SC = residue_psepos_SC[seq]
@@ -200,6 +210,9 @@ def calculate_projections(seq, residue_psepos_CA, residue_psepos_SC, dist=12, ma
 
     return projections
 
+
+from Bio.SeqUtils import seq1
+
 def get_sequence_from_pdb(pdb_file_path):
     parser = Bio.PDB.PDBParser(QUIET=True)
     structure = parser.get_structure('protein', pdb_file_path)
@@ -208,30 +221,124 @@ def get_sequence_from_pdb(pdb_file_path):
         for chain in model:
             for residue in chain:
                 if Bio.PDB.is_aa(residue):
-                    sequence += Bio.PDB.Polypeptide.three_to_one(residue.resname)
+                    # 使用 seq1 将三字母代码转换为单字母代码
+                    sequence += seq1(residue.resname)
     return sequence
 
-def get_pdb_DF(pdb_file_path):
-    parser = Bio.PDB.PDBParser(QUIET=True)
-    structure = parser.get_structure('protein', pdb_file_path)
-    atoms = []
+
+from Bio.SeqUtils import seq1
+
+def get_pdb_DF(file_path):
+    atom_fea_dict = def_atom_features()
+    res_dict = {'GLY': 'G', 'ALA': 'A', 'VAL': 'V', 'ILE': 'I', 'LEU': 'L', 'PHE': 'F', 'PRO': 'P', 'MET': 'M',
+                'TRP': 'W', 'CYS': 'C',
+                'SER': 'S', 'THR': 'T', 'ASN': 'N', 'GLN': 'Q', 'TYR': 'Y', 'HIS': 'H', 'ASP': 'D', 'GLU': 'E',
+                'LYS': 'K', 'ARG': 'R'}
+    atom_count = -1
+    res_count = -1
+    pdb_file = open(file_path, 'r')
+    pdb_res = pd.DataFrame(columns=['ID', 'atom', 'res', 'res_id', 'xyz', 'B_factor'])
     res_id_list = []
-    for model in structure:
-        for chain in model:
-            for residue in chain:
-                if Bio.PDB.is_aa(residue):
-                    res_id = residue.id[1]
-                    res_name = Bio.PDB.Polypeptide.three_to_one(residue.resname)
-                    for atom in residue:
-                        atom_name = atom.name
-                        atom_coord = atom.coord
-                        atom_mass = atom.mass
-                        is_sidechain = 1 if atom_name not in ['N', 'CA', 'C', 'O'] else 0
-                        atoms.append([res_id, atom_name, res_name, atom_coord, atom_mass, is_sidechain])
-                    if res_id not in res_id_list:
-                        res_id_list.append(res_id)
-    pdb_res = pd.DataFrame(atoms, columns=['res_id', 'atom', 'res', 'xyz', 'mass', 'is_sidechain'])
-    return pdb_res, res_id_list
+    try_list = []
+    counter = 0
+    before_res_pdb_id = None
+    Relative_atomic_mass = {'H': 1, 'C': 12, 'O': 16, 'N': 14, 'S': 32, 'FE': 56, 'P': 31, 'BR': 80, 'F': 19, 'CO': 59,
+                            'V': 51,
+                            'I': 127, 'CL': 35.5, 'CA': 40, 'B': 10.8, 'ZN': 65.5, 'MG': 24.3, 'NA': 23, 'HG': 200.6,
+                            'MN': 55,
+                            'K': 39.1, 'AP': 31, 'AC': 227, 'AL': 27, 'W': 183.9, 'SE': 79, 'NI': 58.7}
+
+    encountered_ter = False  # 用于记录是否遇到过 'TER' 行
+
+    with open(file_path, 'r') as pdb_file:
+        while True:
+            # 从pdb文件中读取一行
+            line = pdb_file.readline()
+            # 如果行以'ATOM'开头，处理该行
+            if line.startswith('ATOM'):
+                # 获取原子类型
+                atom_type = line[76:78].strip()
+                # print(atom_type)
+                # 如果原子类型不在Relative_atomic_mass字典中，则跳过该行
+                if atom_type not in Relative_atomic_mass.keys():
+                    continue
+                atom_count += 1
+                # 获取残基ID，并在需要时增加残基计数
+                res_pdb_id = int(line[22:26])
+                if res_pdb_id != before_res_pdb_id:
+                    res_count += 1
+                before_res_pdb_id = res_pdb_id
+                # 检查原子是否属于侧链
+                if line[12:16].strip() not in ['N', 'CA', 'C', 'O', 'H']:
+                    is_sidechain = 1
+                else:
+                    is_sidechain = 0
+                # 获取氨基酸残基的单字母代码
+                res = res_dict[line[17:20]]
+                # 获取原子的符号
+                atom = line[12:16].strip()
+                # 尝试从atom_fea_dict中获取原子特征，如果未找到，则设置为默认值
+                try:
+                    atom_fea = atom_fea_dict[res][atom]
+                except KeyError:
+                    atom_fea = [0.5, 0.5, 0.5]
+
+                raw_value = line[22:26]
+
+                last_col = line[26:27]  # 最后一列
+
+                last_col_value = 0
+                if last_col.isalpha():  # 最后一列是字母
+                    last_col_value = ord(last_col) - ord('A') + 1
+
+                # 将前面几列和最后一列的值拼接成一个整数
+                combined_value = int(''.join(raw_value)) * 100 + last_col_value
+
+                if len(try_list) == 0:
+                    try_list.append(combined_value)
+                    counter += 1
+                elif try_list[-1] != int(combined_value):
+                    try_list.append(combined_value)
+                    counter += 1
+                # 创建一个Pandas Series对象来存储原子信息
+                tmps = pd.Series(
+                    {'ID': atom_count, 'atom': line[12:16].strip(), 'atom_type': atom_type, 'res': res,
+                     'res_id': counter,
+
+                     # 从字符串中提取数字部分
+
+                     'xyz': np.array([float(line[30:38]), float(line[38:46]), float(line[46:54])]),
+
+                     'mass': Relative_atomic_mass[atom_type], 'is_sidechain': is_sidechain})
+
+                # 将原子信息追加到Pandas DataFrame中，并存储残基ID和原子ID
+                if len(res_id_list) == 0:
+                    res_id_list.append(combined_value)
+                elif res_id_list[-1] != int(combined_value):
+                    res_id_list.append(combined_value)
+
+                pdb_res = pdb_res._append(tmps, ignore_index=True)
+                # print(res_id_list)
+
+                # 如果行以'TER'开头，记录该行并继续循环
+                # 如果行以'TER'开头，记录该行，继续循环
+            elif line.startswith('TER'):
+                encountered_ter = True
+
+            # 如果没有下一行了，说明已到文件末尾，退出循环
+            elif not line:
+                res_id_list = list(range(1, len(res_id_list) + 1))  # 反复修改哈 序号有重复的，重新编号！
+                break
+
+            # 如果遇到过 'TER' 行且又遇到了新的行，说明之前的 'TER' 行不是最后一个，重置标志
+            if encountered_ter and line.strip():
+                encountered_ter = False
+
+            # 如果行以'TER'开头，停止处理pdb文件
+
+            # 返回包含原子信息的Pandas DataFrame和残基ID列表
+        return pdb_res, res_id_list
+
 
 def cal_Psepos(seqlist, pdb_file_path, psepos):
     seq_CA_pos = {}
@@ -239,6 +346,7 @@ def cal_Psepos(seqlist, pdb_file_path, psepos):
 
     for seq_id in tqdm(seqlist):
         pdb_res_i, res_id_list = get_pdb_DF(pdb_file_path)
+        # print(len(res_id_list))
 
         res_CA_pos = []
         res_sidechain_centroid = []
@@ -298,7 +406,7 @@ def feature_Adj(protein, projections, prefea, label):
         all_neighbours_dist[k] = dij
 
         projection_neigh = project['projections']
-        tensor_matrix = torch.tensor(projection_neigh).float()
+        tensor_matrix = torch.tensor(np.array(projection_neigh)).float()
         all_neighbours_project[k] = tensor_matrix
 
     dis_dij = all_neighbours_dist
@@ -316,7 +424,7 @@ def feature_Adj(protein, projections, prefea, label):
 
 def predict(data):
     model = Spatom().to(DEVICE)
-    model.load_state_dict(torch.load('D:/new_try/spatconv/best_model.dat'))
+    model.load_state_dict(torch.load('/mnt/data0/uploaduser/best_model.dat'))
     model.eval()
 
     prefea = torch.tensor(data.x).to(DEVICE, dtype=torch.float)
@@ -327,45 +435,88 @@ def predict(data):
     with torch.no_grad():
         pred = model(prefea, xyz_nb, xyz_id, dij)
         pred = pred.cpu().numpy().tolist()
+ # 使用sigmoid函数将预测值转化为0-1之间
 
     return pred
+
+
+
+import csv
+
+
+def save_results_to_csv(seq_id, sequence, predictions):
+    csv_file = f"/mnt/data0/guanmm/{seq_id}_predictions.csv"
+    with open(csv_file, 'w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(["Index", "Amino Acid", "Prediction Score", "Prediction Class"])
+
+        for i, (aa, pred) in enumerate(zip(sequence, predictions)):
+            pred_class = 1 if pred >= 0.21 else 0  
+            writer.writerow([i + 1, aa, pred, pred_class])
+
+    print(f"Results saved to {csv_file}")
+
+
+def load_h5_features(feature_path):
+    protein_data_dict = {}
+
+    # 打开HDF5文件
+    with h5py.File(feature_path, "r") as h5fi:
+        for dataset_name in h5fi.keys():
+            # 从HDF5文件中加载数据集
+            data = h5fi[dataset_name][:]
+            protein_data_dict[dataset_name] = data
+
+    return protein_data_dict
+
+
 
 def main(args):
     pdb_path = args.pdb_file
     feature_path = args.feature_file
 
-    pdb_features = extract_features(pdb_path)
-
-    sequence = get_sequence_from_pdb(pdb_path)
+    # 提取PDB文件名作为蛋白质名称和数据集名称
     seq_id = os.path.splitext(os.path.basename(pdb_path))[0]
-    train_list = [seq_id]
-    seqanno = {seq_id: {'seq': sequence, 'anno': ''}}
 
+    # 提取序列和特征
+    sequence = get_sequence_from_pdb(pdb_path)
+    # print(len(sequence))
+
+    # pdb_features = extract_features(pdb_path)
+
+    train_list = [seq_id]
+    # print(train_list)
     residue_psepos_CA = cal_Psepos(train_list, pdb_path, 'CA')
+
+    # array_data = residue_psepos_CA['5dvz_AB']  就这算少了呢
+    # print("Number of rows:", array_data.shape[0])
     residue_psepos_SC = cal_Psepos(train_list, pdb_path, 'SC')
 
     projections = calculate_projections(seq_id, residue_psepos_CA, residue_psepos_SC)
 
     try:
-        prefea = np.loadtxt(feature_path)
+        # 直接通过PDB文件名加载HDF5特征
+        protein_data_dict = load_h5_features(feature_path)
+        prefea = protein_data_dict[seq_id]
     except Exception as e:
         print(f"Error loading feature file: {e}")
         return
 
-    label = [0] * len(prefea)
+    label = [0] * len(prefea)  # 伪标签
     data = feature_Adj(seq_id, projections, prefea, label)
 
     predictions = predict(data)
 
-    print(f"PDB ID: {seq_id}")
-    print("Scores:")
-    for pred in predictions:
-        print(pred)
+    # 生成并保存CSV文件
+    save_results_to_csv(seq_id, sequence, predictions)
+
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="Predict protein features from PDB and HDF5 files")
+
     parser.add_argument('--pdb_file', '-p', required=True, help='Path to the PDB file')
-    parser.add_argument('--feature_file', '-f', required=True, help='Path to the feature file')
+    parser.add_argument('--feature_file', '-f', required=True, help='Path to the HDF5 feature file')
+
     args = parser.parse_args()
     main(args)
 
