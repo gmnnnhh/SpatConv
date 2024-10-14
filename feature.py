@@ -31,9 +31,6 @@ test_data = pickle.load(open('/mnt/storage1/guanmm/New/customed_data/PP/pp_name_
 with open('/mnt/storage1/guanmm/New/customed_data/PP/pp_name_label.pkl', 'rb') as f:
     all_data_label = pickle.load(f)
 
-with open('/mnt/storage1/guanmm/New/customed_data/PP/feature/Dist_dict.pkl', 'rb') as f:
-    Dist_dict = pickle.load(f)
-
 
 def feature_Adj(data_list, label, mode):
     Datasets = []
@@ -74,8 +71,6 @@ def feature_Adj(data_list, label, mode):
         if mode == 'test':
             numeric_labels = [float(item) for item in label[protein]]
             labels = torch.tensor(np.array(numeric_labels), dtype=torch.float)
-            Dist = edge_weight(torch.tensor(Dist_dict[i]))[pos, :][:, pos]
-            adj = torch.tensor(np.where(np.array(Dist_dict[i]) < 14, 1, 0)[pos, :][:, pos])
             xyz_nb = all_neighbours_project
             prefea = prefea_dict.get(i)
             dis_dij = all_neighbours_dist
@@ -83,8 +78,6 @@ def feature_Adj(data_list, label, mode):
         else:
             numeric_labels = [float(item) for item in label[protein]]
             labels = torch.tensor(np.array(numeric_labels)[pos], dtype=torch.float)
-            Dist = edge_weight(torch.tensor(Dist_dict[i]))[pos, :][:, pos]
-            adj = torch.tensor(np.where(np.array(Dist_dict[i]) < 14, 1, 0)[pos, :][:, pos])
             xyz_nb = all_neighbours_project
             prefea = prefea_dict.get(i)
             dis_dij = all_neighbours_dist
@@ -92,18 +85,15 @@ def feature_Adj(data_list, label, mode):
 
         data = Data(y=labels)
         data.name = i
-        data.dist = Dist
-
         data.POS = pos
         data.POS1 = pos1
-
         length = len(label[protein])
         data.length = length
         data.xyz_nb = xyz_nb
         data.xyz_id = xyz_id
         data.dij = dis_dij
         data.prefea = prefea
-        data.adj = adj
+
         Datasets.append(data)
     f = open('/mnt/storage1/guanmm/New/customed_data/PP/feature/' + mode + '_feature.pkl', 'wb')
     pickle.dump(Datasets, f)
