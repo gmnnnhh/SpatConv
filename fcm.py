@@ -50,7 +50,10 @@ with open(Dataset_dir + '/pp_psepos_SC.pkl', 'rb') as f:
             for i in range(len(label)):
                 res_centers = pos_CA[i]
                 res_zaxis = pos_SC[i]
-                res_yaxis = pos_SC[i - 1]
+                if i == 0:
+                    res_yaxis = (1, 0, 0)
+                else:
+                    res_yaxis = pos_SC[i - 1]
                 delta_10 = torch.from_numpy(res_zaxis - res_centers, )
                 delta_20 = torch.from_numpy(res_yaxis - res_centers)
                 zaxis = (delta_10 + epsilon) / (

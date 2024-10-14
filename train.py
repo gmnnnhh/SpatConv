@@ -52,8 +52,8 @@ def main():
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(DEVICE)
 
-LEARN_RATE = 0.01
-EPOCH = 1
+LEARN_RATE = 0.001
+EPOCH = 20
 train_set = pickle.load(
     open('/mnt/storage1/guanmm/New/customed_data/PP/feature/' + 'train' + '_feature.pkl', 'rb'))
 test_set = pickle.load(
