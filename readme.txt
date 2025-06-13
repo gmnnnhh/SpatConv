@@ -6,7 +6,7 @@ Protein-protein interactions (PPIs) play a pivotal role in a multitude of biolog
 
 1.Run command:：
 
-python SpatConv.py --pdb_file D:\new_try\spatconv\examples\4CPA_A_l.pdb --feature_file D:\new_try\spatconv\examples\4CPA_A_l.h5
+python SpatConv.py --pdb_file .\spatconv\examples\4CPA_A_l.pdb --feature_file .\spatconv\examples\4CPA_A_l.h5
 
 
 
