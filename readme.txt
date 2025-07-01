@@ -22,3 +22,8 @@ The first input is a PDB file. The second input is a feature file, which is a h5
 （2）Run fcm.py to generate the local coordinate system for each amino acid and package the projection information.
 （3）After obtaining the 1024-dimensional features for each amino acid through the pre-trained language model, run feature.py to perform feature integration processing.
 （4）Run train.py to perform model training and prediction.
+
+
+4. Data Availability:
+
+The PDB files for the Protein Stone dataset are publicly available at Zenodo (Record ID: 10826801). The remaining three categories of PDB files used in this study are available at the data directory of the GitHub repository SpatConv.
