@@ -132,14 +132,7 @@ class SpatConv(nn.Module):
 
 
     def extract_features(self, x, xyz_id_tensor):
-        """
-        提取每个氨基酸邻居的特征。
-        参数:
-        x: [B_total, feat_dim]，所有氨基酸的特征（整个 batch 展平后）
-        xyz_id_tensor: [B, max_N]，每个氨基酸对应的邻居在 x 中的索引
-        返回:
-        neighbor_feats: [B, max_N, feat_dim]，每个氨基酸的邻居特征
-        """
+        
         flat_idx = xyz_id_tensor.view(-1).long()  # [B * max_N]
 
         gathered_feats = x[flat_idx]  # [B * max_N, feat_dim]
@@ -147,11 +140,7 @@ class SpatConv(nn.Module):
         return neighbor_feats
 
     def forward(self, x, window_ij_t, current_xyz_nb, current_xyz_id):
-        """
-        x: [B, feat_dim] 主序列特征张量
-        window_ij_t: [B, 1, K] 邻居权重张量
-        current_xyz_nb: [B, K, 3] 投影坐标张量（已batched）
-        """
+       
         B, _, K = window_ij_t.shape
         x = x.squeeze()
         residual = self.dropout(self.fc(x))  # [B, Hidden]
@@ -170,3 +159,4 @@ class SpatConv(nn.Module):
         layer_inner = self.act_fn(self.chen[0](linear_output, residual, self.lamda, self.alpha, 1))
         output = self.net_out(layer_inner)  # [B, out_dim]
         return output.squeeze()  # [B] 或者 [B, out_dim]
+
