@@ -13,16 +13,10 @@ import time
 import sklearn.metrics as skm
 import torch.nn as nn
 import matplotlib.pyplot as plt
-from torch.optim.lr_scheduler import ReduceLROnPlateau  # 随着性能改变的学习率
+from torch.optim.lr_scheduler import ReduceLROnPlateau  
 import random
 import pandas as pd
-# 创建 TensorBoard 摘要编写器
 
-# torch.manual_seed(1209)
-# np.random.seed(1205)
-# if torch.cuda.is_available():
-#     torch.cuda.manual_seed(1209)
-#     torch.cuda.set_device(0)
 def set_random_seed(seed):
     random.seed(seed)
     np.random.seed(seed)
@@ -32,7 +26,7 @@ def set_random_seed(seed):
         torch.cuda.manual_seed_all(seed)
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
-        torch.cuda.set_device(0)  # 设置CUDA设备，如果有多个设备可以更改此部分
+        torch.cuda.set_device(0)  
 
 
 def get_new_seed():
@@ -69,10 +63,10 @@ def main():
 DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print(DEVICE)
 
-LEARN_RATE = 0.01  # 改了 0.001
-EPOCH = 50  # 改了 150
+LEARN_RATE = 0.001 
+EPOCH = 50  
 train_set = pickle.load(open('/mnt/data0/uploaduser/' + 'train' + '_feature_train_dist0.pkl', 'rb'))
-test_set = pickle.load(open('/mnt/data0/uploaduser/' + 'test' + '_feature_train_dist0.pkl', 'rb'))  # _13rsa  _yuce
+test_set = pickle.load(open('/mnt/data0/uploaduser/' + 'test' + '_feature_train_dist0.pkl', 'rb')) 
 
 
 def best_f_1(label, output):
@@ -98,43 +92,29 @@ weight_decay = 1e-5
 
 
 def train(train_set=train_set):
-    # samples_num = len(train_set)
-    # # print(train_set)
-    # split_num = int(70 / 85 * samples_num)
-    # data_index = np.arange(samples_num)
-    # np.random.seed(1205)
-    # np.random.shuffle(data_index)
-    # train_index = data_index[:split_num]      #！！！！！！！！！！
+      
 
     samples_num = len(train_set)
     # print(train_set)
     split_num = int(70 / 85 * samples_num)
     data_index = np.arange(samples_num)
-    # np.random.seed(1205)
-    # np.random.shuffle(data_index)
+    
     seed = get_new_seed()
     save_seed(seed, 'seeds.txt')
     set_random_seed(seed)
     np.random.shuffle(data_index)
-    # # set_random_seed(seed)
-    train_index = data_index[:samples_num]  # 原来所有样本
+    
+    train_index = data_index[:samples_num]  
     valid_index = data_index[split_num:]
 
-    # 限制数据集的样本数（例如，只使用前100个样本进行测试）
-    # small_sample_size = 10  # 你可以根据需要修改这个数量
-    # train_index = data_index[:split_num][:small_sample_size]  # 只选择小样本量
-    # valid_index = data_index[split_num:][:small_sample_size]  # 只选择小样本量
 
-    # 使用SubsetRandomSampler从train_set中根据索引抽取样本
-    # train_sampler = SubsetRandomSampler(train_index)
-    # valid_sampler = SubsetRandomSampler(valid_index)
 
     train_loader = DataLoader(train_set, batch_size=1, sampler=train_index)
     valid_loader = DataLoader(train_set, batch_size=1, sampler=valid_index)
     model = SpatConv()
     # model.print_hyperparameters_and_architecture()
     optimizer = optim.Adam(model.parameters(), lr=LEARN_RATE, weight_decay=weight_decay)
-    loss_fun = nn.BCELoss()  # 二分类交叉熵损失函数
+    loss_fun = nn.BCELoss()  
 
     scheduler = ReduceLROnPlateau(optimizer, 'max', factor=0.5, patience=3, verbose=True)
 
@@ -178,43 +158,35 @@ def train(train_set=train_set):
             max_epoch = epoch + 1
             max_t = t_max
             torch.save(model.cpu().state_dict(), f'{result_path}/best_model.dat')
-            counter = 0  # 重置计数器
+            counter = 0  
         else:
-            counter += 1  # 没有改善，则计数器加1
+            counter += 1  
 
         scheduler.step(f_1)
 
-        # 将模型移回到原始设备上，如果使用了cuda
+       
         if torch.cuda.is_available():
             model.cuda()
 
-        # 检查是否达到早停条件
+      
         if counter >= patience:
             print(f"Early stopping triggered after {epoch + 1} epochs.")
-            break  # 提前终止训练
-            ########
+            break  
+           
     plt.plot(train_log, 'r-', label='Training Loss')
     plt.plot(valid_log, 'b-', label='Validation Loss')
 
-    # 添加图例
     plt.legend()
 
-    # 添加图表标题和坐标轴标签
     plt.title('Training and Validation Loss')
     plt.xlabel('Epoch')
     plt.ylabel('Loss')
-
-    # 保存图表
     plt.savefig(f"{result_path}/train_valid_loss.png")
-
-    # 关闭图表，以便释放内存
     plt.close()
-
     plt.plot(valid_f_1, 'r-')
     plt.title('valid_f_1')
     plt.savefig(f"{result_path}/valid_f_1.png")
     plt.close()
-
     print("Max Epoch: ", max_epoch)
     print('F_1:', max_f_1, max_t)
     print('ACC:', max_acc)
@@ -268,7 +240,6 @@ def valid_epoch(model, valid_loader, loss_fun):
             label = data.y.to(DEVICE, dtype=torch.float)
             current_xyz_id = data.xyz_id_tensor.to(DEVICE, dtype=torch.float)
 
-            # 只保留这两个：
             window_ij_t_dict = data.window_ij_t.to(DEVICE, dtype=torch.float)
 
             current_xyz_nb = data.p_ij_tensor.to(DEVICE, dtype=torch.float)
@@ -285,7 +256,7 @@ def valid_epoch(model, valid_loader, loss_fun):
 
     epoch_loss = loss / num
     accuracy, recall, precision, MCC, f_1_max, t_max = best_f_1(np.array(all_label), np.array(all_pred))
-    # scheduler.step(valid_loss / len(valid_loader))   # 加入学习率调度器啦啦 没成功加入哈哈
+   
     return epoch_loss, accuracy, recall, precision, MCC, f_1_max, t_max
 
 
@@ -310,7 +281,7 @@ def test(test_set):
 
             pos = data.POS[0]
             pos1 = data.POS1[0]
-            pos1_set = set(pos1)  # 将 pos1 转换为集合以优化查找操作
+            pos1_set = set(pos1) 
             length = data.length.item()
 
             pred = model(prefea, window_ij_t_dict, current_xyz_nb, current_xyz_id)
@@ -319,9 +290,9 @@ def test(test_set):
             predict_protein = [0] * length
             for k, i in enumerate(pos):
                 if i not in pos1_set:
-                    predict_protein[i] = pred[k]  # 直接使用pred中的预测值更新predict_protein
-            all_label.extend(label)  # 将真实标签添加到all_label列表中
-            all_pred.extend(predict_protein)  # 将预测结果添加到all_pred列表中
+                    predict_protein[i] = pred[k]  
+            all_label.extend(label) 
+            all_pred.extend(predict_protein) 
 
 
 
@@ -353,4 +324,5 @@ if __name__ == '__main__':
     # result_path = './result/2022-12-05-18:47:00'
     os.makedirs(result_path)
     train()
+
     test(test_set)
