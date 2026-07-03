@@ -8,17 +8,15 @@ This invention proposes an innovative geometric deep learning framework, **SpatC
 
 **SpatConv** constructs local coordinate systems that adhere to SE(3) equivariance, enabling precise mapping of residue distribution and integration of multi-scale protein features. The use of spatial graph convolution techniques facilitates efficient message passing and feature updating.
 
----
+## ⚙️ 1. Environment Configuration
 
-## 🚀 1. Run Command
-
-To run the SpatConv model, use the following command:
+To set up the environment, use the provided `environment.yml` file to install the necessary dependencies.
 
 ```bash
-python SpatConv.py --pdb_file ./spatconv/examples/4CPA_A_l.pdb --feature_file ./spatconv/examples/4CPA_A_l.h5
+conda env create -f environment.yml
 ```
 
----
+
 
 ## 📦 2. Requirements
 
@@ -53,11 +51,20 @@ Follow these steps to reproduce the experiment:
 - The remaining three categories of PDB files used in this study are available in the `data` directory of the GitHub repository **SpatConv**.
 
 ---
+---
 
-## ⚙️ 5. Environment Configuration
+## 🚀 5. Run Command
 
-To set up the environment, use the provided `environment.yml` file to install the necessary dependencies.
+To run the SpatConv model, use the following command:
 
 ```bash
-conda env create -f environment.yml
+python SpatConv.py --pdb_file ./spatconv/examples/4CPA_A_l.pdb --feature_file ./spatconv/examples/4CPA_A_l.h5
 ```
+
+---
+
+## Citation
+
+If you find **SpatConv** useful in your research, please cite:
+
+Mingming Guan, Jiyun Han, Shizhuo Zhang, Hongyu Zheng, Juntao Liu. *SpatConv Enables the Accurate Prediction of Protein Binding Sites by a Pretrained Protein Language Model and an Interpretable Bio-spatial Convolution.* **Research.** 2025;8:0773. DOI:10.34133/research.0773.
